@@ -1,0 +1,31 @@
+create table gocart_bi_sandbox.sn_cp_call_met_roll_90day_full_test_v7 as
+with cte2 as (
+select
+	a.full_date,
+	a.country_iso_2,
+	count(distinct case when cast(m.event_date as date) between date_add(cast(a.full_date as date) - 90)  day and cast(a.full_date as date)
+			then organization_name
+			else null end) as attemtped_in_last90,
+	count(distinct m.organization_name) as attemtped_in_last182
+from gocart_bi_sandbox.cp_date_iso2 a
+	left join gocart_bi_sandbox.cp_call_metrics m on a.country_iso_2 = m.country_iso_2
+	-- This below join won't work when you run this query in HIVE. It should run without any problems in PRESTO(Starburst) and SPARK
+				and cast(m.event_date as date) between date_add(cast(a.full_date as date) - 182)  day and cast(a.full_date as date)
+group by 1, 2
+)
+select 
+	a.full_date as event_date,
+	dt.fiscal_year_quarter,
+	dt.fiscal_quarter_week,
+	dt.fiscal_start_week,
+	a.country_iso_2,
+	mkt.country_name,
+	mkt.market_area_description,
+	coalesce(a.attemtped_in_last90, 0) as contacted_leads_roll_90_day,
+	coalesce(a.attemtped_in_last182, 0) as contacted_leads_roll_182_day
+from cte2 a
+	left join gocart_bi_sandbox.aks_warehouse_country mkt
+		on a.country_iso_2 = mkt.country_code_iso2
+	left join gocart.dim_date dt
+		on a.full_date = dt.full_date
+;
